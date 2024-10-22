@@ -3,228 +3,262 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Map;
+import java.util.Timer;
+import java.util.TimerTask;
 
 public class MainWindow extends JFrame {
     private AttendanceManager manager;
     private JTable table;
     private DefaultTableModel tableModel;
     private JTextField pinField;
-    private JTextField classField;
-    private JTextField diaryNumberField;
+    private JTextField classFieldManual;
+    private JTextField diaryNumberFieldManual;
     private JTextField firstNameField;
     private JTextField lastNameField;
-    private JPanel manualAddPanel;
-    private static final String FILE_PATH = "student_data.csv";
+    private JTextField classFieldStudent;
+    private JTextField diaryNumberFieldStudent;
+    private JTextField cardPinFieldStudent;
+    private Timer timer;
+    private String studentsString;
 
     public MainWindow() {
+        super("Attendance Manager");
+
         manager = new AttendanceManager();
-        setTitle("Attendance Manager");
-        setSize(800, 600);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
-        tableModel = new DefaultTableModel(new Object[]{"First Name", "Last Name", "Card Pin", "Class", "Diary Number", "Date"}, 0);
+        setLayout(new BorderLayout());
+
+        // Table
+        String[] columns = {"Date", "Card Pin", "First Name", "Last Name", "Class", "Diary Number"};
+        tableModel = new DefaultTableModel(columns, 0);
         table = new JTable(tableModel);
-        add(new JScrollPane(table), BorderLayout.CENTER);
+        table.setPreferredScrollableViewportSize(new Dimension(700, 200));
+        table.setFillsViewportHeight(true);
 
-        JPanel actionPanel = new JPanel();
-        actionPanel.setLayout(new GridLayout(4, 1));
+        JScrollPane scrollPane = new JScrollPane(table);
+        add(scrollPane, BorderLayout.NORTH);
 
-        JButton loadButton = new JButton("Load From File");
-        loadButton.addActionListener(new ActionListener() {
+        // Pin field and buttons
+        JPanel topPanel = new JPanel(new GridLayout(1, 7));
+        pinField = new JTextField();
+        pinField.addKeyListener(new KeyAdapter() {
             @Override
-            public void actionPerformed(ActionEvent e) {
-                loadStudentsToTable();
+            public void keyReleased(KeyEvent e) {
+                if (timer != null) {
+                    timer.cancel();
+                }
+                timer = new Timer();
+                timer.schedule(new TimerTask() {
+                    @Override
+                    public void run() {
+                        processCardPinInput();
+                    }
+                }, 200);
             }
         });
 
-        JButton manualAddButton = new JButton("Manual Add");
+        topPanel.add(new JLabel("Card PIN"));
+        topPanel.add(pinField);
+
+        JButton addButton = new JButton("Add student");
+        JButton manualAddButton = new JButton("Manual add");
+        JButton checkInButton = new JButton("Check In");
+        JButton loadButton = new JButton("Load from file");
+        JButton removeButton = new JButton("Remove selected");
+
+        topPanel.add(addButton);
+        topPanel.add(manualAddButton);
+        topPanel.add(checkInButton);
+        topPanel.add(loadButton);
+        topPanel.add(removeButton);
+
+        add(topPanel, BorderLayout.CENTER);
+
+        // Manual add panel
+        JPanel manualAddPanel = new JPanel(new GridLayout(3, 2));
+        manualAddPanel.add(new JLabel("Class"));
+        classFieldManual = new JTextField();
+        manualAddPanel.add(classFieldManual);
+
+        manualAddPanel.add(new JLabel("Diary Number"));
+        diaryNumberFieldManual = new JTextField();
+        manualAddPanel.add(diaryNumberFieldManual);
+
+        JButton manualAddToTableButton = new JButton("ADD to table");
+        manualAddPanel.add(manualAddToTableButton);
+
+        manualAddPanel.setVisible(false);
+        add(manualAddPanel, BorderLayout.SOUTH);
+
+        // Add student panel
+        JPanel addStudentPanel = new JPanel(new GridLayout(6, 2));
+
+        addStudentPanel.add(new JLabel("First Name"));
+        firstNameField = new JTextField();
+        addStudentPanel.add(firstNameField);
+
+        addStudentPanel.add(new JLabel("Last Name"));
+        lastNameField = new JTextField();
+        addStudentPanel.add(lastNameField);
+
+        addStudentPanel.add(new JLabel("Class"));
+        classFieldStudent = new JTextField();
+        addStudentPanel.add(classFieldStudent);
+
+        addStudentPanel.add(new JLabel("Diary Number"));
+        diaryNumberFieldStudent = new JTextField();
+        addStudentPanel.add(diaryNumberFieldStudent);
+
+        addStudentPanel.add(new JLabel("Card Pin"));
+        cardPinFieldStudent = new JTextField();
+        addStudentPanel.add(cardPinFieldStudent);
+
+        JButton addStudentToFileButton = new JButton("Add to file");
+        addStudentPanel.add(addStudentToFileButton);
+
+        addStudentPanel.setVisible(false);
+        add(addStudentPanel, BorderLayout.SOUTH);
+
+        // Event listeners
         manualAddButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                toggleManualAddPanelVisibility();
+                manualAddPanel.setVisible(true);
+                addStudentPanel.setVisible(false);
             }
         });
 
-        pinField = new JTextField();
-        pinField.addActionListener(new ActionListener() {
+        addButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                manualAddPanel.setVisible(false);
+                addStudentPanel.setVisible(true);
+            }
+        });
+
+        manualAddToTableButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                processManualAdd();
+            }
+        });
+
+        addStudentToFileButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                processAddStudentToFile();
+            }
+        });
+
+        checkInButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
                 processCardPinInput();
             }
         });
 
-        JButton removeButton = new JButton("Remove Student");
+        loadButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                loadStudentsFromFile();
+            }
+        });
+
         removeButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                removeSelectedStudent();
+                removeSelectedRow();
             }
         });
 
-        actionPanel.add(new JLabel("Card Pin:"));
-        actionPanel.add(pinField);
-        actionPanel.add(loadButton);
-        actionPanel.add(manualAddButton);
-        actionPanel.add(removeButton);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setSize(800, 600);
+        setVisible(true);
 
-        add(actionPanel, BorderLayout.SOUTH);
-
-        manualAddPanel = new JPanel();
-        manualAddPanel.setLayout(new GridLayout(6, 2));
-        manualAddPanel.setVisible(false);
-
-        JLabel firstNameLabel = new JLabel("First Name:");
-        firstNameField = new JTextField();
-        manualAddPanel.add(firstNameLabel);
-        manualAddPanel.add(firstNameField);
-
-        JLabel lastNameLabel = new JLabel("Last Name:");
-        lastNameField = new JTextField();
-        manualAddPanel.add(lastNameLabel);
-        manualAddPanel.add(lastNameField);
-
-        JLabel classLabel = new JLabel("Class:");
-        classField = new JTextField();
-        manualAddPanel.add(classLabel);
-        manualAddPanel.add(classField);
-
-        JLabel diaryNumberLabel = new JLabel("Diary Number:");
-        diaryNumberField = new JTextField();
-        manualAddPanel.add(diaryNumberLabel);
-        manualAddPanel.add(diaryNumberField);
-
-        JButton addButton = new JButton("Add Student");
-        addButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                addStudentToTable();
-            }
-        });
-
-        manualAddPanel.add(addButton);
-        add(manualAddPanel, BorderLayout.NORTH);
-
-        loadStudentsFromFile(FILE_PATH);  // Load existing students on startup
-    }
-
-    private void toggleManualAddPanelVisibility() {
-        manualAddPanel.setVisible(!manualAddPanel.isVisible());
-    }
-
-    private void addStudentToTable() {
-        String firstName = firstNameField.getText();
-        String lastName = lastNameField.getText();
-        String cardPin = pinField.getText();  // Use the card PIN from the text field
-        String classNumber = classField.getText();
-        String schoolDiaryNumber = diaryNumberField.getText();
-
-        manager.addStudent(firstName, lastName, cardPin, classNumber, schoolDiaryNumber);
-        tableModel.addRow(new Object[]{firstName, lastName, cardPin, classNumber, schoolDiaryNumber});
-        clearManualAddFields();
-    }
-
-    private void clearManualAddFields() {
-        firstNameField.setText("");
-        lastNameField.setText("");
-        classField.setText("");
-        diaryNumberField.setText("");
+        // Load students from file and print to terminal
+        loadStudentsFromFile();
+        System.out.println(studentsString);
     }
 
     private void processCardPinInput() {
         String cardPin = pinField.getText();
-        boolean studentFound = false;
-
-        if (!cardPin.isEmpty()) {
-            Student student = manager.getStudentByPin(cardPin);
-            if (student != null) {
-                if (manager.isDuplicateEntryWithinDay(cardPin)) {
-                    JOptionPane.showMessageDialog(this, "Warning: " + student.firstName + " " + student.lastName + " already checked in within the last 24 hours.", "Error", JOptionPane.ERROR_MESSAGE);
-                } else {
-                    String currentDate = getCurrentDate();
-                    updateTableWithCheckedInStudent(cardPin, currentDate);
-                    manager.checkInStudent(cardPin); // Log the check-in
-                }
-                studentFound = true;
-            }
+        if (!cardPin.trim().isEmpty()) {
+            manager.checkInStudent(cardPin);
+            updateTableWithCheckedInStudent(cardPin);
+            pinField.setText("");
+        } else {
+            JOptionPane.showMessageDialog(this, "Please enter a valid card pin.");
         }
-
-        if (!studentFound) {
-            JOptionPane.showMessageDialog(this, "Student with card PIN " + cardPin + " not found.", "Error", JOptionPane.ERROR_MESSAGE);
-        }
-        pinField.setText("");
     }
 
-    private String generateCardPin() {
-        return String.valueOf(System.currentTimeMillis() % 10000);
+    private void processManualAdd() {
+        String classNumber = classFieldManual.getText();
+        String diaryNumber = diaryNumberFieldManual.getText();
+
+        String defaultFirstName = "Default";
+        String defaultLastName = "Student";
+        String defaultCardPin = "1";
+
+        manager.addStudent(defaultFirstName, defaultLastName, defaultCardPin, classNumber, diaryNumber);
+        updateTableWithCheckedInStudent(defaultCardPin);
+    }
+
+    private void processAddStudentToFile() {
+        String firstName = firstNameField.getText();
+        String lastName = lastNameField.getText();
+        String classNumber = classFieldStudent.getText();
+        String diaryNumber = diaryNumberFieldStudent.getText();
+        String cardPin = cardPinFieldStudent.getText();
+
+        manager.addStudent(firstName, lastName, cardPin, classNumber, diaryNumber);
+
+        updateTableWithCheckedInStudent(cardPin);
+    }
+
+    private void updateTableWithCheckedInStudent(String cardPin) {
+        Student student = manager.getStudents().get(cardPin);
+        if (student != null) {
+            tableModel.addRow(new Object[]{
+                    getCurrentDate(), student.cardPin, student.firstName, student.lastName, student.classNumber, student.schoolDiaryNumber
+            });
+        } else {
+            System.out.println("Student with card PIN " + cardPin + " not found.");
+        }
     }
 
     private String getCurrentDate() {
-        SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-        Date date = new Date();
-        return formatter.format(date);
+        return new SimpleDateFormat("dd.MM.yyyy-HH:mm:ss").format(new Date());
     }
 
-    private void updateTableWithCheckedInStudent(String cardPin, String currentDate) {
-        Student student = manager.getStudentByPin(cardPin);
-        if (student != null && !manager.isDuplicateEntryWithinDay(cardPin)) {
-            tableModel.addRow(new Object[]{
-                    student.firstName, student.lastName, student.cardPin, student.classNumber, student.schoolDiaryNumber, currentDate
-            });
-            System.out.println("Updated table with: " + student.firstName + " " + student.lastName);
+    public void loadStudentsFromFile() {
+        manager.loadStudentsFromFile("student_data.csv");
+
+        // Initialize studentsString with student data
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, Student> entry : manager.getStudents().entrySet()) {
+            Student student = entry.getValue();
+            sb.append(String.format("Student: %s %s, Card Pin: %s, Class: %s, Diary Number: %s\n",
+                    student.firstName, student.lastName, student.cardPin, student.classNumber, student.schoolDiaryNumber));
         }
+        studentsString = sb.toString();
+        System.out.println("Students loaded from file successfully.");
     }
 
-    private void loadStudentsToTable() {
-        tableModel.setRowCount(0);  // Clear existing data in the table
-        for (Student student : manager.getStudents().values()) {
-            // Use current date for illustration
-            String currentDate = getCurrentDate();
-            tableModel.addRow(new Object[]{
-                    student.firstName, student.lastName, student.cardPin, student.classNumber, student.schoolDiaryNumber, currentDate
-            });
-            System.out.println("Loaded student: " + student.firstName + " " + student.lastName);
-        }
-    }
-
-    private void loadStudentsFromFile(String filePath) {
-        try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                String[] values = line.split(",");
-                String firstName = values[0];
-                String lastName = values[1];
-                String cardPin = values[2];
-                String classNumber = values[3];
-                String schoolDiaryNumber = values[4];
-                manager.addStudent(firstName, lastName, cardPin, classNumber, schoolDiaryNumber);
-                tableModel.addRow(new Object[]{firstName, lastName, cardPin, classNumber, schoolDiaryNumber});
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void removeSelectedStudent() {
+    private void removeSelectedRow() {
         int selectedRow = table.getSelectedRow();
-        if (selectedRow != -1) {
-            String cardPin = (String) tableModel.getValueAt(selectedRow, 2);
-            manager.removeStudent(cardPin);
+        if (selectedRow >= 0) {
             tableModel.removeRow(selectedRow);
-            System.out.println("Student with card PIN " + cardPin + " removed.");
         } else {
-            JOptionPane.showMessageDialog(this, "No student selected.", "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Please select a row to remove.");
         }
     }
 
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(new Runnable() {
-            @Override
-            public void run() {
-                MainWindow window = new MainWindow();
-                window.setVisible(true);
-            }
-        });
+        SwingUtilities.invokeLater(() -> new MainWindow());
     }
 }
