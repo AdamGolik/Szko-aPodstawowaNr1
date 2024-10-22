@@ -1,0 +1,15 @@
+version: "3.8"
+services:
+  attendancesystem:
+    build: .
+    container_name: attendancesystem_container
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: ["./build/AttendanceSystem"]
+    environment:
+      - DISPLAY=${DISPLAY}
+    network_mode: "host"
+    devices:
+      - "/dev/dri"
+    shm_size: '2gb'
